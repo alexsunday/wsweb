@@ -1,0 +1,37 @@
+/*
+ * Copyright 2020 Signal Messenger, LLC
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
+syntax = "proto3";
+package wshttp;
+
+option go_package = "/frame";
+
+message Request {
+  uint64 id = 1;
+  string verb = 2;
+  string path = 3;
+  bytes body = 4;
+  repeated string headers = 5;
+}
+
+message Response {
+  uint64 id = 1;
+  uint32 status = 2;
+  string message = 3;
+  repeated string headers = 5;
+  bytes body = 4;
+}
+
+message Message {
+  enum Type {
+    UNKNOWN = 0;
+    REQUEST = 1;
+    RESPONSE = 2;
+  }
+
+  Type type = 1;
+  Request request = 2;
+  Response response = 3;
+}
