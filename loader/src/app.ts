@@ -23,7 +23,7 @@
  */
 
 import { guessWsUrl, WebConn } from "./ws";
-import {createAxios} from './adapter'
+import { createAxios } from './adapter'
 import { AxiosInstance } from "axios";
 import { dynamicLoadCssContent, dynamicLoadJsContent } from "./loader";
 
@@ -44,57 +44,70 @@ const homeHTML = `<!DOCTYPE html>
 
 const parser = new DOMParser()
 const decoder = new TextDecoder();
+const allowed = ['SCRIPT', 'LINK', 'STYLE', 'TITLE', 'META'] as const;
+const allowedSet = new Set<string>(allowed);
+type allowedType = typeof allowed[number];
+
+function nodeFilter(n: string): n is allowedType {
+  return allowedSet.has(n);
+}
+
 export async function homeLoader(h: string, req: AxiosInstance) {
   const doc = parser.parseFromString(h, "text/html");
-  document.body = doc.body;
+  document.body.innerHTML = '<div id="app"/>';
   // parse head
   const head = doc.head.childNodes;
-  for(let i=0; i!=head.length; i++) {
+  for (let i = 0; i != head.length; i++) {
     const cur = head[i];
-    if(cur.nodeType !== Node.ELEMENT_NODE) {
+    if (cur.nodeType !== Node.ELEMENT_NODE) {
       continue;
     }
     // 暂时只关注 link 与 script
-    if(cur.nodeName !== 'SCRIPT' && cur.nodeName !== 'LINK' && cur.nodeName !== "STYLE") {
+    const tagName = cur.nodeName;
+    if (!nodeFilter(tagName)) {
       continue;
     }
-    if(cur.nodeName === 'SCRIPT') {
-      if(!(cur instanceof HTMLScriptElement)) {
-        console.warn("script tag not a valid script element?");
-        continue;
-      }
-      if(cur.src === "") {
-        // 直接把这个标签加入 document
+    switch (tagName) {
+      case 'SCRIPT':
+        if (!(cur instanceof HTMLScriptElement)) {
+          console.warn("script tag not a valid script element?");
+          continue;
+        }
+        if (cur.src === "") {
+          // 直接把这个标签加入 document
+          document.head.appendChild(cur);
+        } else {
+          // 设定动态加载 必须使用ws通道加载
+          loadScript(req, cur.src)
+        }
+        break;
+      case 'LINK':
+        if (!(cur instanceof HTMLLinkElement)) {
+          console.warn("link tag not a valid link element?");
+          continue;
+        }
+        if (cur.rel !== "stylesheet") {
+          continue;
+        }
+        loadStyle(req, cur.href);
+        break;
+      case 'STYLE':
+      case 'META':
+      case 'TITLE':
         document.head.appendChild(cur);
-      } else {
-        // 设定动态加载 必须使用ws通道加载
-        loadScript(req, cur.src)
-      }
-      continue;
-    }
-    if(cur.nodeName === "LINK") {
-      if(!(cur instanceof HTMLLinkElement)) {
-        console.warn("link tag not a valid link element?");
-        continue;
-      }
-      if(cur.rel !== "stylesheet") {
-        continue;
-      }
-      loadStyle(req, cur.href);
-      continue;
-    }
-    if(cur.nodeName === 'STYLE') {
-      document.head.appendChild(cur);
+        break;
+      default:
+        break;
     }
   }
 }
 
 async function loadStyle(req: AxiosInstance, href: string) {
   const rs = await req.get(href);
-  if(rs.status < 200 || rs.status > 299) {
+  if (rs.status < 200 || rs.status > 299) {
     throw new Error(`${href} request failed`);
   }
-  if(!(rs.data instanceof Uint8Array)) {
+  if (!(rs.data instanceof Uint8Array)) {
     throw new Error("response not valid buffer");
   }
   dynamicLoadCssContent(decoder.decode(rs.data));
@@ -102,10 +115,10 @@ async function loadStyle(req: AxiosInstance, href: string) {
 
 async function loadScript(req: AxiosInstance, src: string) {
   const rs = await req.get(src);
-  if(rs.status < 200 || rs.status > 299) {
+  if (rs.status < 200 || rs.status > 299) {
     throw new Error(`${src} request failed`);
   }
-  if(!(rs.data instanceof Uint8Array)) {
+  if (!(rs.data instanceof Uint8Array)) {
     throw new Error("response not valid buffer");
   }
   dynamicLoadJsContent(decoder.decode(rs.data));
@@ -118,6 +131,7 @@ function main(w: Window) {
 
   const req = createAxios(web);
   web.addEventListener("open", () => {
+    (w as any).__web = web;
     homeLoader(homeHTML, req);
   });
 }

@@ -25,7 +25,13 @@ func main() {
 		w := c.Writer
 		w.WriteHeader(http.StatusOK)
 		w.Header().Set("Content-Type", "text/html")
-		w.WriteString(fmt.Sprintf(`<script src="/static/loader/%s"></script>`, loader))
+		home := fmt.Sprintf(`<!DOCTYPE html><html lang="zh"><head>
+			<link rel="icon" href="data:;base64,=">
+			<script src="/static/loader/%s"></script>
+			</head></html>`, loader)
+		home = strings.ReplaceAll(home, "\n", "")
+		home = strings.ReplaceAll(home, "\t", "")
+		w.WriteString(home)
 	})
 	r.GET("/websocket", wsHttpHandler(r))
 	r.Static("/static", "../web/dist")
