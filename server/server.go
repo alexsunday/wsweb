@@ -18,6 +18,15 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  4096,
+	WriteBufferSize: 4096,
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+var logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
+
 type httpServer interface {
 	ServeHTTP(http.ResponseWriter, *http.Request)
 }
@@ -31,30 +40,11 @@ func wsHttpHandler(r httpServer) gin.HandlerFunc {
 			return
 		}
 
-		ctx, cancel := context.WithCancel(context.TODO())
-		h := &HttpChannel{
-			conn: &wsReadWrapper{
-				Conn: conn,
-			},
-			ctx:    ctx,
-			cancel: cancel,
-			chIn:   make(chan *frame.Message),
-			chOut:  make(chan *frame.Message),
-			server: r,
-		}
+		h := NewHttpChannel(c, conn, r)
 		go h.ReadLoop()
 		go h.Handle()
 	}
 }
-
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  4096,
-	WriteBufferSize: 4096,
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
-}
-var logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
 
 type httpWriter struct {
 	header     http.Header
@@ -104,10 +94,9 @@ func (m *wsReadWrapper) Close() error {
 	return m.Conn.Close()
 }
 
+// 应用层获取，只从缓存中拿 如缓存不够 就从ws获取
 func (m *wsReadWrapper) Read(p []byte) (int, error) {
-	// 应用层获取，只从缓存中拿 如缓存不够 就从底层获取
 	for {
-		logger.Info("inspect", "cache", len(m.readCache), "app", len(p))
 		if len(m.readCache) >= len(p) {
 			break
 		}
@@ -145,41 +134,6 @@ func (m *wsReadWrapper) readFromLink() error {
 	return nil
 }
 
-func (m *wsReadWrapper) _Read(p []byte) (int, error) {
-	// 如果缓存里的数据长度大于应用层需要的长度，直接处理
-	appLength := len(p)
-	cacheLength := len(m.readCache)
-	if cacheLength >= appLength {
-		// copy 时，长度以 参数中更小的那个 为准
-		copy(p, m.readCache)
-		m.readCache = m.readCache[appLength:]
-		return appLength, nil
-	}
-	// 如果缓存里的数据长度小雨应用层需要的，先复制部分数据到应用层，再去接收
-	// len(p) > len(cache)
-	if len(m.readCache) > 0 {
-		copy(p, m.readCache)
-		m.readCache = make([]byte, 0)
-	}
-	hasRead := len(m.readCache)
-	// 再接收数据
-	msgType, buf, err := m.Conn.ReadMessage()
-	if err != nil {
-		return hasRead, fmt.Errorf("read websocket message failed %w", err)
-	}
-	if msgType == websocket.TextMessage {
-		return hasRead, fmt.Errorf("unsupport text message now")
-	}
-
-	// 接收到部分数据
-	logger.Info("实际接收到字节数", "length", len(buf), "预期", len(p))
-	copy(p, buf)
-	if len(buf) > len(p) {
-		return len(p), fmt.Errorf("too small buffer %d", len(buf))
-	}
-	return len(buf), nil
-}
-
 type HttpChannel struct {
 	conn   io.ReadWriteCloser
 	ctx    context.Context
@@ -190,6 +144,20 @@ type HttpChannel struct {
 
 	// request
 	response Map[uint64, chan *frame.Response]
+}
+
+func NewHttpChannel(ctx context.Context, conn *websocket.Conn, server httpServer) *HttpChannel {
+	ctx, cancel := context.WithCancel(ctx)
+	return &HttpChannel{
+		conn: &wsReadWrapper{
+			Conn: conn,
+		},
+		ctx:    ctx,
+		cancel: cancel,
+		chIn:   make(chan *frame.Message),
+		chOut:  make(chan *frame.Message),
+		server: server,
+	}
 }
 
 // 简化协议，6字节报头, 其中前4字节为大端序 内容为 后续包体部分长度 不包括这6字节
@@ -217,7 +185,6 @@ func (m *HttpChannel) ReadLoop() {
 			return
 		}
 
-		logger.Info("预备继续读取", "length", left)
 		var body = make([]byte, left)
 		_, err = io.ReadFull(m.conn, body)
 		if err != nil {
@@ -231,7 +198,6 @@ func (m *HttpChannel) ReadLoop() {
 			logger.Warn("反序列化失败", "error", err)
 			return
 		}
-		logger.Info("获取到完整消息")
 		m.chIn <- &f
 	}
 }
@@ -292,7 +258,6 @@ func (m *HttpChannel) handleFrame(f *frame.Message) error {
 	if req != nil && rsp != nil {
 		return fmt.Errorf("request and response all valued")
 	}
-	logger.Info("收到有效数据包")
 	if f.Type == frame.Message_REQUEST {
 		// 开新goroutine处理http请求
 		// TODO 换成线程池？
@@ -323,7 +288,6 @@ func (m *HttpChannel) handleRequest(req *frame.Request) error {
 	if req.Id == 0 {
 		return fmt.Errorf("ID empty")
 	}
-	logger.Info("构造数据包")
 
 	body := bytes.NewBuffer(req.Body)
 	method := strings.ToUpper(req.Verb)
@@ -347,8 +311,8 @@ func (m *HttpChannel) handleRequest(req *frame.Request) error {
 		Type:     frame.Message_RESPONSE,
 		Response: rsp,
 	}
-	_, err = m.writeFrame(rs)
-	return err
+	m.chOut <- rs
+	return nil
 }
 
 /*
@@ -382,15 +346,11 @@ func (m *HttpChannel) Request(req *frame.Request, timeoutMs int) (*frame.Respons
 	var ch = make(chan *frame.Response)
 	m.response.Store(id, ch)
 
-	var err error
 	var f = &frame.Message{
 		Type:    frame.Message_REQUEST,
 		Request: req,
 	}
-	_, err = m.writeFrame(f)
-	if err != nil {
-		return nil, fmt.Errorf("write frame failed %w", err)
-	}
+	m.chOut <- f
 
 	select {
 	case v, ok := <-ch:
@@ -425,7 +385,4 @@ func (m *HttpChannel) writeFrame(f *frame.Message) (int, error) {
 	binary.BigEndian.PutUint16(out[4:6], 0x01)
 	copy(out[6:], content)
 	return m.conn.Write(out)
-}
-
-type HttpProto struct {
 }

@@ -26,7 +26,7 @@ function mergeBuf(b1: Uint8Array, b2: Uint8Array): Uint8Array {
   return buf;
 }
 
-export class WebConn {
+export class WebConn extends EventTarget {
   private url = "";
   private txid = 1;
   private ws: WebSocket|null = null;
@@ -34,6 +34,7 @@ export class WebConn {
   private buf: Uint8Array = new Uint8Array();
 
   constructor(wsUrl: string) {
+    super();
     this.url = wsUrl;
   }
 
@@ -53,8 +54,8 @@ export class WebConn {
     }
     this.ws.onopen = e => {
       this.onOpen(e);
+      this.dispatchEvent(new CustomEvent("open"));
     }
-    // 添加定时器 每分钟发送 keepalive
   }
 
   private getTxId() {
@@ -73,10 +74,6 @@ export class WebConn {
     this.requests.set(txid, defered);
 
     console.log(`verb: ${verb}, path: ${path}`);
-    console.info(header);
-    console.info(body);
-    console.log('request dump finished!');
-
     // 构造并发送请求
     const msg = create(MessageSchema, {
       type: Message_Type.REQUEST,
@@ -90,7 +87,6 @@ export class WebConn {
     });
     this.sendMessage(msg);
     const rs = await defered.promise;
-    console.log(rs.id);
     this.requests.delete(txid);
     return rs;
   }
@@ -107,7 +103,6 @@ export class WebConn {
     if(!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new Error('connection not open');
     }
-    console.log(`完整写入 ${out.buffer.byteLength} 字节`);
     this.ws.send(out);
   }
 
@@ -117,18 +112,14 @@ export class WebConn {
   
   private onMessage(e: MessageEvent<any>) {
     const msg = e.data;
-    if(msg instanceof Uint8Array) {
-      console.log('receive uint8array')
-    } else {
-      console.log(`receive ${typeof msg}`);
-      console.info(msg);
+    if(!(msg instanceof Blob)) {
+      console.warn(`expected receive a valid blob`);
+      console.log(msg);
+      return;
     }
-    if(msg instanceof Blob) {
-      console.log('receive blob!');
-      msg.arrayBuffer().then(rs=>{
-        this.receivedData(rs);
-      });
-    }
+    msg.arrayBuffer().then(rs=>{
+      this.receivedData(rs);
+    });
   }
 
   private receivedData(msg: ArrayBuffer) {

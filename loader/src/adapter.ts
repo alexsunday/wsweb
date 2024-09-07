@@ -33,22 +33,12 @@ function parseReqPath(u: string) {
   return reqPath;
 }
 
-/**
-export interface AxiosResponse<T = any, D = any> {
-  data: T;
-  status: number;
-  statusText: string;
-  headers: RawAxiosResponseHeaders | AxiosResponseHeaders;
-  config: InternalAxiosRequestConfig<D>;
-  request?: any;
-}
- */
 async function doWebRequest(req: InternalAxiosRequestConfig, web: WebConn): Promise<AxiosResponse> {
   const verb = req.method || "GET";
   const reqPath = parseReqPath(req.url || "/");
   const headers = req.headers;
   const body = req.data;
-  const rs = await web.doHttp(verb, reqPath, parseHeaders(headers), body)
+  const rs = await web.doHttp(verb, reqPath, parseHeaders(headers), body);
   return {
     data: rs.body,
     status: rs.status,

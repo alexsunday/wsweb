@@ -91,6 +91,9 @@ export async function homeLoader(h: string, req: AxiosInstance) {
 
 async function loadStyle(req: AxiosInstance, href: string) {
   const rs = await req.get(href);
+  if(rs.status < 200 || rs.status > 299) {
+    throw new Error(`${href} request failed`);
+  }
   if(!(rs.data instanceof Uint8Array)) {
     throw new Error("response not valid buffer");
   }
@@ -99,6 +102,9 @@ async function loadStyle(req: AxiosInstance, href: string) {
 
 async function loadScript(req: AxiosInstance, src: string) {
   const rs = await req.get(src);
+  if(rs.status < 200 || rs.status > 299) {
+    throw new Error(`${src} request failed`);
+  }
   if(!(rs.data instanceof Uint8Array)) {
     throw new Error("response not valid buffer");
   }
@@ -111,9 +117,9 @@ function main(w: Window) {
   web.open();
 
   const req = createAxios(web);
-  setTimeout(() => {
+  web.addEventListener("open", () => {
     homeLoader(homeHTML, req);
-  }, 1000)
+  });
 }
 
 main(window);
