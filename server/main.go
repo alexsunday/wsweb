@@ -1,13 +1,17 @@
 package main
 
 import (
+	"embed"
 	"fmt"
+	"io/fs"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
+
+//go:embed dist
+var webStatic embed.FS
 
 func main() {
 	r := gin.Default()
@@ -15,8 +19,17 @@ func main() {
 	r.GET("/ping", func(c *gin.Context) {
 		c.String(http.StatusOK, "pong")
 	})
+
+	// r.Static("/web", "dist")
+	distFs, err := fs.Sub(webStatic, "dist")
+	if err != nil {
+		logger.Warn("embed not found dist sub dir")
+		return
+	}
+	r.StaticFS("/web", http.FS(distFs))
+
 	r.GET("/", func(c *gin.Context) {
-		loader, err := findLoader("../web/dist/loader")
+		loader, err := findLoader("dist/loader")
 		if err != nil {
 			c.AbortWithStatus(http.StatusNotFound)
 			return
@@ -34,13 +47,13 @@ func main() {
 		w.WriteString(home)
 	})
 	r.GET("/websocket", wsHttpHandler(r))
-	r.Static("/web", "../web/dist")
 
 	r.Run(":8080")
 }
 
 func findLoader(baseDir string) (string, error) {
-	files, err := os.ReadDir(baseDir)
+	files, err := webStatic.ReadDir(baseDir)
+	// files, err := os.ReadDir(baseDir)
 	if err != nil {
 		return "", fmt.Errorf("查找加载器文件夹时 失败 %w", err)
 	}
