@@ -27,14 +27,14 @@ func main() {
 		w.Header().Set("Content-Type", "text/html")
 		home := fmt.Sprintf(`<!DOCTYPE html><html lang="zh"><head>
 			<link rel="icon" href="data:;base64,=">
-			<script src="/static/loader/%s"></script>
+			<script src="/web/loader/%s"></script>
 			</head></html>`, loader)
 		home = strings.ReplaceAll(home, "\n", "")
 		home = strings.ReplaceAll(home, "\t", "")
 		w.WriteString(home)
 	})
 	r.GET("/websocket", wsHttpHandler(r))
-	r.Static("/static", "../web/dist")
+	r.Static("/web", "../web/dist")
 
 	r.Run(":8080")
 }

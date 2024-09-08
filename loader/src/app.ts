@@ -27,21 +27,6 @@ import { createAxios } from './adapter'
 import { AxiosInstance } from "axios";
 import { dynamicLoadCssContent, dynamicLoadJsContent } from "./loader";
 
-const homeHTML = `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <link rel="icon" href="data:;base64,=">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vite App</title>
-    <script type="module" crossorigin src="/static/assets/index-a7vVztxq.js"></script>
-    <link rel="stylesheet" crossorigin href="/static/assets/index-DcocGvzi.css">
-  </head>
-  <body>
-    <div id="app"></div>
-  </body>
-</html>`;
-
 const parser = new DOMParser()
 const decoder = new TextDecoder();
 const allowed = ['SCRIPT', 'LINK', 'STYLE', 'TITLE', 'META'] as const;
@@ -124,6 +109,8 @@ async function loadScript(req: AxiosInstance, src: string) {
   dynamicLoadJsContent(decoder.decode(rs.data));
 }
 
+import homeHtmlBinary from '../../web/dist/index.html';
+
 function main(w: Window) {
   const wsUrl = guessWsUrl(w.location.protocol, w.location.host);
   const web = new WebConn(wsUrl);
@@ -132,7 +119,7 @@ function main(w: Window) {
   const req = createAxios(web);
   web.addEventListener("open", () => {
     (w as any).__web = web;
-    homeLoader(homeHTML, req);
+    homeLoader(decoder.decode(homeHtmlBinary), req);
   });
 }
 

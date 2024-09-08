@@ -4,7 +4,7 @@
   "main": "ws_pb.js",
   "scripts": {
     "prebuild": "rimraf ../web/dist/loader",
-    "build": " esbuild --bundle --minify --sourcemap=inline --platform=browser src/app.ts --outdir=../web/dist/loader --entry-names=[dir]/[name]-[hash] --outbase=src",
+    "build": " esbuild --bundle --loader:.html=binary --minify --sourcemap=inline --platform=browser src/app.ts --outdir=../web/dist/loader --entry-names=[dir]/[name]-[hash] --outbase=src",
     "protobuf": "buf generate"
   },
   "keywords": [],

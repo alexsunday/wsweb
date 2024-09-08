@@ -1,14 +1,23 @@
-import './assets/main.css'
+import './assets/base.css'
 
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
 import App from './App.vue'
-import router from './router'
+import { initRouter } from './router';
+import { initAxios } from './utils/axios';
 
-const app = createApp(App)
+function main() {
+  const app = createApp(App);
+  const router = initRouter();
+  const axios = initAxios();
+  (window as any).axios = axios;
 
-app.use(createPinia())
-app.use(router)
+  app.config.globalProperties.$axios = axios;
+  app.use(createPinia())
+  app.use(router)
+  
+  app.mount('#app')
+}
 
-app.mount('#app')
+main();
