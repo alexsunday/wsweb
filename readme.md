@@ -41,3 +41,7 @@
 1. 服务端，代码里的 server 文件夹 将收到的任何websocket数据，通过protobuf解析后，组装为一个 http.Request 结构，将该结构送入 gin.RouterGroup::ServeHTTP(http.ResponseWriter, *http.Request) 方法，将 http.ResponseWriter 产生的结果再次通过 websocket 通道将数据发送回客户端；
 2. 客户端，web 文件夹，主要逻辑是在连接到服务器后，将任何请求，使用 axios 的 adapter/请求适配器，封装为 protobuf 数据包，并送入websocket通道，留意这里为每个 HTTP 请求都附加了一个 唯一标识，方便在收到返回收据后能正确的唤醒请求发生时的 Promise；
 3. 代码中的 loader 文件夹，是一个简单的加载器，用于解析 前端工程产生的 HTML，将 HTML 里的 css，js 文件也通过该通道请求。
+
+# TODO
+1. 优化 loader 体积
+2. 加入 重连 机制与选项 无动作时不重连

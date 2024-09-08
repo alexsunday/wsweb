@@ -109,7 +109,7 @@ async function loadScript(req: AxiosInstance, src: string) {
   dynamicLoadJsContent(decoder.decode(rs.data));
 }
 
-import homeHtmlBinary from '../../server/dist/index.html';
+const homeHtmlBinary = require("../../server/dist/index.html");
 
 function main(w: Window) {
   const wsUrl = guessWsUrl(w.location.protocol, w.location.host);

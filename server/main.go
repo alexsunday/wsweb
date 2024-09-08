@@ -1,32 +1,20 @@
 package main
 
 import (
-	"embed"
 	"fmt"
-	"io/fs"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
-//go:embed dist
-var webStatic embed.FS
-
 func main() {
 	r := gin.Default()
 
+	serveWeb(r)
 	r.GET("/ping", func(c *gin.Context) {
 		c.String(http.StatusOK, "pong")
 	})
-
-	// r.Static("/web", "dist")
-	distFs, err := fs.Sub(webStatic, "dist")
-	if err != nil {
-		logger.Warn("embed not found dist sub dir")
-		return
-	}
-	r.StaticFS("/web", http.FS(distFs))
 
 	r.GET("/", func(c *gin.Context) {
 		loader, err := findLoader("dist/loader")
@@ -52,8 +40,7 @@ func main() {
 }
 
 func findLoader(baseDir string) (string, error) {
-	files, err := webStatic.ReadDir(baseDir)
-	// files, err := os.ReadDir(baseDir)
+	files, err := readDir(baseDir)
 	if err != nil {
 		return "", fmt.Errorf("查找加载器文件夹时 失败 %w", err)
 	}
