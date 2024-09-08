@@ -1,27 +1,29 @@
 # ALL in WebSocket
 
+这仅仅是一个 技术Demo 可[下载Release](https://github.com/alexsunday/wsweb/releases)体验。
+
 # 功能介绍
 整个网站几乎不使用任何标准HTTP请求，不信？可以使用 F12 打开浏览器的开发者工具，切换到 Network 网络标签，再刷新页面，应该可以看到3个请求：
-![图片](https://github.com/user-attachments/assets/a258f46c-8418-4c07-9480-c9b2d782fcee)
+![图片](./docs/1.png)
 
 当然，需要隐藏一些 非真实发生的 HTTP 请求，否则会有干扰：
-![图片](https://github.com/user-attachments/assets/493ebc26-776e-42e3-8ae5-c811aef61664)
+![图片](./docs/2.png)
 
 我们简单解析网站所有的 HTTP 请求：
 1. 首页 HTML 请求，该请求实质上只有一行 `<script>` 标签
-![图片](https://github.com/user-attachments/assets/871af508-9152-43ae-b13c-ce71a6349fec)
+![图片](./docs/3.png)
 
 2. 由首页加载的 javascript 加载器，里面有密密麻麻的代码
 3. /websocket 请求，这将是整个网站的最后一个请求，后续所有的网络交互，均在此请求内发生
 
 如下图，无论执行多少次 ajax 请求，右侧的网络栏里，均不会再产生新的请求
-![图片](https://github.com/user-attachments/assets/0cd80af0-0239-487a-8ea7-b144dc8ae7c2)
+![图片](./docs/4.png)
 
 但仔细检查 websocket 请求，可以看到所有数据途径了该通道：
-![图片](https://github.com/user-attachments/assets/ebb4fa3e-a1a8-4f8f-b315-35eaf10a87e2)
+![图片](./docs/5.png)
 
 甚至可以请求图片，右下角的websocket调试窗口中出现的JFIF表明了这是一个jpeg格式的图片：
-![图片](https://github.com/user-attachments/assets/76f41bbb-0426-4934-88bd-874413b1c345)
+![图片](./docs/6.png)
 
 
 # 优劣
