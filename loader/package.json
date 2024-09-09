@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "main": "ws_pb.js",
   "scripts": {
-    "prebuild": "rimraf ../web/dist/loader",
-    "build": " esbuild --bundle --loader:.html=binary --minify --sourcemap=inline --platform=browser src/app.ts --outdir=../server/dist/loader --entry-names=[dir]/[name]-[hash] --outbase=src",
+    "prebuild": "rimraf ../server/dist/loader",
+    "build": "esbuild --bundle --loader:.html=binary --metafile=dist/meta.json --minify --platform=browser src/app.ts --outdir=../server/dist/loader --entry-names=[dir]/[name]-[hash] --outbase=src",
+    "build:dev": "esbuild --bundle --loader:.html=binary --minify --sourcemap=inline --platform=browser src/app.ts --outdir=../server/dist/loader --entry-names=[dir]/[name]-[hash] --outbase=src",
     "protobuf": "buf generate"
   },
   "keywords": [],

@@ -23,8 +23,6 @@
  */
 
 import { guessWsUrl, WebConn } from "./ws";
-import { createAxios } from './adapter'
-import { AxiosInstance } from "axios";
 import { dynamicLoadCssContent, dynamicLoadJsContent } from "./loader";
 
 const parser = new DOMParser()
@@ -37,7 +35,7 @@ function nodeFilter(n: string): n is allowedType {
   return allowedSet.has(n);
 }
 
-export async function homeLoader(h: string, req: AxiosInstance) {
+export async function homeLoader(h: string, web: WebConn) {
   const doc = parser.parseFromString(h, "text/html");
   document.body.innerHTML = '<div id="app"/>';
   // parse head
@@ -63,7 +61,7 @@ export async function homeLoader(h: string, req: AxiosInstance) {
           document.head.appendChild(cur);
         } else {
           // 设定动态加载 必须使用ws通道加载
-          loadScript(req, cur.src)
+          loadScript(web, cur.src)
         }
         break;
       case 'LINK':
@@ -74,7 +72,7 @@ export async function homeLoader(h: string, req: AxiosInstance) {
         if (cur.rel !== "stylesheet") {
           continue;
         }
-        loadStyle(req, cur.href);
+        loadStyle(web, cur.href);
         break;
       case 'STYLE':
       case 'META':
@@ -87,39 +85,94 @@ export async function homeLoader(h: string, req: AxiosInstance) {
   }
 }
 
-async function loadStyle(req: AxiosInstance, href: string) {
-  const rs = await req.get(href);
-  if (rs.status < 200 || rs.status > 299) {
-    throw new Error(`${href} request failed`);
+function _fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  let reqUrl = "";
+  let method = "GET";
+  if(typeof input === 'string') {
+    reqUrl = input;
   }
-  if (!(rs.data instanceof Uint8Array)) {
-    throw new Error("response not valid buffer");
+  if(input instanceof URL) {
+    reqUrl = input.pathname + input.search + input.hash;
+  } else if(input instanceof Request) {
+    reqUrl = input.url;
+    method = input.method;
   }
-  dynamicLoadCssContent(decoder.decode(rs.data));
+
+  // new(body?: BodyInit | null, init?: ResponseInit)
+  const resp = new Response(null, {
+    headers: {},
+    status: 200,
+    statusText: '',
+  });
+  return new Promise(resolve => {resolve(resp)});
 }
 
-async function loadScript(req: AxiosInstance, src: string) {
-  const rs = await req.get(src);
-  if (rs.status < 200 || rs.status > 299) {
-    throw new Error(`${src} request failed`);
+async function doWebRequest(web: WebConn, reqPath: string, method: string, headers: Map<string, string>, body: any) {
+  const verb = method || "GET";
+  const header: string[] = [];
+  for(const key of headers.keys()) {
+    const val = headers.get(key);
+    header.push(`${key}: ${val}`);
   }
-  if (!(rs.data instanceof Uint8Array)) {
+  return web.doHttp(verb, reqPath, header, body);
+}
+
+  /*
+  url 有多种可能性
+  1. 以 / 开头
+  2. 以 // 开头
+  3. 以 https? 开头
+  4. 以 域名开头
+  */
+function extractUrl(u: string) :string {
+  if(u.startsWith("http")) {
+    const url = new URL(u);
+    return url.pathname + url.search + url.hash;
+  }
+  if(u.startsWith("/")) {
+    return u;
+  }
+  throw new Error(`cannot support URL:[${u}] now`);
+}
+
+async function fetchResource(web: WebConn, u: string, headers: Map<string, string>) {
+ console.log(`URL: ${u}`);
+ const url = extractUrl(u);
+  const rs = await doWebRequest(web, url, "GET", headers, undefined);
+  if(rs.status < 200 || rs.status > 299) {
+    throw new Error(`${u} fetch failed`);
+  }
+  if (!(rs.body instanceof Uint8Array)) {
     throw new Error("response not valid buffer");
   }
-  dynamicLoadJsContent(decoder.decode(rs.data));
+  return rs.body;
+}
+
+async function loadStyle(web: WebConn, href: string) {
+  const headers = new Map<string, string>([
+    ['Accept', 'text/css,*/*;q=0.1']
+  ]);
+  const rs = await fetchResource(web, href, headers);
+  dynamicLoadCssContent(decoder.decode(rs));
+}
+
+async function loadScript(web: WebConn, src: string) {
+  const headers = new Map<string, string>([
+    ['Accept', 'application/javascript']
+  ]);
+  const rs = await fetchResource(web, src, headers);
+  dynamicLoadJsContent(decoder.decode(rs));
 }
 
 const homeHtmlBinary = require("../../server/dist/index.html");
-
 function main(w: Window) {
   const wsUrl = guessWsUrl(w.location.protocol, w.location.host);
   const web = new WebConn(wsUrl);
   web.open();
 
-  const req = createAxios(web);
   web.addEventListener("open", () => {
     (w as any).__web = web;
-    homeLoader(decoder.decode(homeHtmlBinary), req);
+    homeLoader(decoder.decode(homeHtmlBinary), web);
   });
 }
 
