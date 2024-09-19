@@ -32,7 +32,7 @@ export async function _fetch(input: RequestInfo | URL, init?: RequestInit): Prom
       method = init.method;
     }
     if(init.referrer) {
-      //
+      headers.push(`Referer: ${init.referrer}`);
     }
   }
 

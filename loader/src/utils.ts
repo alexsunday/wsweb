@@ -47,6 +47,14 @@ export async function parseReqBody(reqBody: BodyInit): Promise<Uint8Array> {
     body = new Uint8Array(buf);
   } else if(reqBody instanceof ArrayBuffer) {
     body = new Uint8Array(reqBody);
+  } else if(reqBody instanceof FormData) {
+    throw new Error('unsupported FormData now');
+  } else if(reqBody instanceof URLSearchParams) {
+    body = encoder.encode(reqBody.toString());
+  } else if(reqBody instanceof ReadableStream) {
+    throw new Error('unsupported ReadableStream now');
+  } else {
+    throw new Error('unsupported this body format now');
   }
 
   return body;
