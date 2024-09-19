@@ -24,9 +24,11 @@
 
 import { guessWsUrl, WebConn } from "./ws";
 import { dynamicLoadCssContent, dynamicLoadJsContent } from "./loader";
+import { parseHeaders, parseHeadersInit, parseReqBody, parseReqPath, toHeaders } from "./utils";
 
 const parser = new DOMParser()
 const decoder = new TextDecoder();
+const encoder = new TextEncoder();
 const allowed = ['SCRIPT', 'LINK', 'STYLE', 'TITLE', 'META'] as const;
 const allowedSet = new Set<string>(allowed);
 type allowedType = typeof allowed[number];
@@ -85,7 +87,11 @@ export async function homeLoader(h: string, web: WebConn) {
   }
 }
 
-function _fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+async function _fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  if(!window.__web) {
+    throw new Error('adapter not initialized!');
+  }
+  const webObj = window.__web;
   let reqUrl = "";
   let method = "GET";
   if(typeof input === 'string') {
@@ -98,13 +104,31 @@ function _fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>
     method = input.method;
   }
 
-  // new(body?: BodyInit | null, init?: ResponseInit)
-  const resp = new Response(null, {
-    headers: {},
-    status: 200,
-    statusText: '',
-  });
-  return new Promise(resolve => {resolve(resp)});
+  let body = new Uint8Array(0);
+  let headers: string[] = [];
+  if(init) {
+    const reqBody = init.body;
+    if(reqBody) {
+      body = await parseReqBody(reqBody);
+    }
+    const reqHeaders = init.headers;
+    if(reqHeaders) {
+      headers = parseHeadersInit(reqHeaders);
+    }
+    if(init.method) {
+      method = init.method;
+    }
+    if(init.referrer) {
+      //
+    }
+  }
+
+  const response = await webObj.doHttp(method, parseReqPath(reqUrl), headers, body);
+  return new Response(response.body, {
+    headers: toHeaders(response.headers),
+    status: response.status,
+    statusText: response.message,
+  })
 }
 
 async function doWebRequest(web: WebConn, reqPath: string, method: string, headers: Map<string, string>, body: any) {
@@ -171,7 +195,8 @@ function main(w: Window) {
   web.open();
 
   web.addEventListener("open", () => {
-    (w as any).__web = web;
+    w.__web = web;
+    w.__fetch = _fetch;
     homeLoader(decoder.decode(homeHtmlBinary), web);
   });
 }

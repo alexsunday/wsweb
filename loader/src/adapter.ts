@@ -1,5 +1,6 @@
 import axios, { AxiosRequestHeaders, AxiosHeaders, AxiosResponseHeaders, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import {WebConn} from './ws';
+import { parseReqPath } from './utils';
 
 function parseHeaders(h: AxiosRequestHeaders): string[] {
   const rs: string[] = [];
@@ -22,15 +23,6 @@ function toHeaders(headers: string[]): AxiosResponseHeaders {
     obj.set(key, val);
   }
   return obj;
-}
-
-function parseReqPath(u: string) {
-  if(u.startsWith("/")) {
-    return u;
-  }
-  const reqUrl = new URL(u);
-  const reqPath = reqUrl.pathname + reqUrl.search + reqUrl.hash;
-  return reqPath;
 }
 
 async function doWebRequest(req: InternalAxiosRequestConfig, web: WebConn): Promise<AxiosResponse> {
