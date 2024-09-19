@@ -1,14 +1,14 @@
 import { nanoid } from "nanoid";
-import {MessageSchema, Message_Type, RequestSchema, ResponseSchema} from './gen/ws_pb';
-import type{ Message, Request, Response} from './gen/ws_pb';
+import { MessageSchema, Message_Type } from './gen/ws_pb';
+import type { Message, Request, Response } from './gen/ws_pb';
 import { create, toBinary, fromBinary } from "@bufbuild/protobuf";
 import Defered from "./defered";
 
 export function guessWsUrl(protocol: string, host: string) {
   let wsUrl = "";
-  if(protocol === "http:") {
+  if (protocol === "http:") {
     wsUrl += "ws://";
-  } else if(protocol === "https:") {
+  } else if (protocol === "https:") {
     wsUrl += "wss://";
   } else {
     throw new Error('unknown protocol!');
@@ -29,7 +29,7 @@ function mergeBuf(b1: Uint8Array, b2: Uint8Array): Uint8Array {
 export class WebConn extends EventTarget {
   private url = "";
   private txid = 1;
-  private ws: WebSocket|null = null;
+  private ws: WebSocket | null = null;
   private requests: Map<number, Defered<Response>> = new Map();
   private buf: Uint8Array = new Uint8Array();
 
@@ -39,7 +39,7 @@ export class WebConn extends EventTarget {
   }
 
   public open() {
-    if(this.ws !== null) {
+    if (this.ws !== null) {
       throw new Error('不允许重复连接');
     }
     this.ws = new WebSocket(this.url);
@@ -93,14 +93,14 @@ export class WebConn extends EventTarget {
 
   private sendMessage(msg: Message) {
     const content = toBinary(MessageSchema, msg);
-    
+
     const out = new Uint8Array(content.byteLength + 6);
     const dv = new DataView(out.buffer);
     dv.setUint32(0, content.byteLength, false);
     dv.setUint16(4, 0x01, false);
     out.set(content, 6);
 
-    if(!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new Error('connection not open');
     }
     this.ws.send(out);
@@ -109,15 +109,15 @@ export class WebConn extends EventTarget {
   private onOpen(e: Event) {
     console.log("websocket opened!");
   }
-  
+
   private onMessage(e: MessageEvent<any>) {
     const msg = e.data;
-    if(!(msg instanceof Blob)) {
+    if (!(msg instanceof Blob)) {
       console.warn(`expected receive a valid blob`);
       console.log(msg);
       return;
     }
-    msg.arrayBuffer().then(rs=>{
+    msg.arrayBuffer().then(rs => {
       this.receivedData(rs);
     });
   }
@@ -127,26 +127,26 @@ export class WebConn extends EventTarget {
     const cur = new Uint8Array(msg);
     this.buf = mergeBuf(this.buf, cur);
     // 循环处理
-    while(true) {
-      if(this.buf.byteLength < 6) {
+    while (true) {
+      if (this.buf.byteLength < 6) {
         break;
       }
       // 先取出6字节头
       const head = this.buf.slice(0, 6);
       const dv = new DataView(head.buffer);
       const left = dv.getUint32(0, false);
-      if(left > 128 * 1024 * 1024) {
+      if (left > 128 * 1024 * 1024) {
         throw new Error('too large frame!');
       }
       // 如果缓冲区里的数据不够 退出处理流程
-      if((this.buf.byteLength - 6) < left) {
+      if ((this.buf.byteLength - 6) < left) {
         break;
       }
       const body = this.buf.slice(6, 6 + left);
       const msgObj = fromBinary(MessageSchema, body);
       // 如果裁去了包体还有剩余
-      if((this.buf.byteLength - 6 - left) > 0) {
-        this.buf = this.buf.slice(6+left);
+      if ((this.buf.byteLength - 6 - left) > 0) {
+        this.buf = this.buf.slice(6 + left);
       } else {
         this.buf = new Uint8Array();
       }
@@ -155,20 +155,20 @@ export class WebConn extends EventTarget {
   }
 
   private handleValidFrame(msgObj: Message) {
-    if(msgObj.type === Message_Type.REQUEST) {
+    if (msgObj.type === Message_Type.REQUEST) {
       // handle request
-      if(!msgObj.request) {
+      if (!msgObj.request) {
         console.warn("receive a valid frame, type is REQUEST, but request object is empty!");
         return;
       }
       return this.handleRequest(msgObj.request);
-    } else if(msgObj.type === Message_Type.RESPONSE) {
-      if(!msgObj.response) {
+    } else if (msgObj.type === Message_Type.RESPONSE) {
+      if (!msgObj.response) {
         console.warn("receive a valid frame, type is RESPONSE, but response object is empty!");
         return;
       }
       return this.handleResponse(msgObj.response);
-    } 
+    }
     console.error("unknown msgtype", msgObj.type);
     console.log(msgObj);
   }
@@ -176,7 +176,7 @@ export class WebConn extends EventTarget {
   handleResponse(rsp: Response) {
     const txid = Number(BigInt.asUintN(64, rsp.id));
     const defered = this.requests.get(txid);
-    if(!defered) {
+    if (!defered) {
       console.warn("received a response, but not match the request");
       return;
     }
